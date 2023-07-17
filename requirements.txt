@@ -1,0 +1,6 @@
+chardet
+urllib3
+elementpath
+lxml
+cloudscraper
+requests
