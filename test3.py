@@ -29,7 +29,7 @@ from elementpath.xpath3 import  XPath30Parser, XPath31Parser
 import requests,cloudscraper
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from chardet.universaldetector import UniversalDetector ; detector = UniversalDetector()
-
+import chardet
 
 cs = cloudscraper.CloudScraper(ssl_context=ssl._create_unverified_context())
 sem = threading.Semaphore(threadsCount)
@@ -57,24 +57,26 @@ def detectEncoding(req):
   except: return "utf-8"
 
 
-def parseSite(url,sitetype,exp):
-  sem.acquire(True)
-  try:
-#    with capture_http(warcFS):
-#      req = cs.get(url=url, timeout = 15)
-    req = cs.get(url=url, timeout = 15)
-    resp = req.content
-  except Exception as e:
-    return f"Site {url} error {e}"
-  finally:
-    sem.release()
-  with open("lastresp.txt","wb") as f:
-    f.write(req.content)
-  enc = detectEncoding(req)
+def parseSite(url,sitetype,exp,data):
+  if len(data)>0:
+    resp = data[0].text
+    enc = "utf-8"
+  else:
+    sem.acquire(True)
+    try:
+      req = cs.get(url=url, timeout = 15)
+      resp = req.content
+    except Exception as e:
+      return f"Site error {url} {e}"
+    finally:
+      sem.release()
+#    with open("lastresp.txt","wb") as f:
+#      f.write(req.content)
+    enc = detectEncoding(req)
 
   if sitetype in ["HTM", "DIN"]:
     try: ht = lt.fromstring(resp, parser=lt.HTMLParser(encoding=enc))
-    except:
+    except Exception as e:
       try: ht = lt.fromstring(resp.decode(enc), parser=lt.HTMLParser())
       except Exception as e:
         return f"Site parsing {url} error {e}"
@@ -114,9 +116,9 @@ def producer():
     hostLock.add(hostURL)
     dataKey = d["url"]+d["sitetype"]+d["exp"]
     try:
+      if len(d["data"])>0: raise 
       if (datetime.now()-results[dataKey]["time"]).total_seconds() >timeAging:raise
-    except:results[dataKey]={d["exp"]:parseSite(d["url"],d["sitetype"],d["exp"]),"time":datetime.now()}; print (d["url"], results[dataKey])
-      
+    except:results[dataKey]={d["exp"]:parseSite(d["url"],d["sitetype"],d["exp"],d["data"]),"time":datetime.now()}; print (d["url"], results[dataKey])
     finally:q.task_done(); hostLock.discard(hostURL)
 
 for i in range(1,threadsCount):
@@ -137,9 +139,10 @@ class ReqHandle(BaseHTTPRequestHandler):
               results[dataKey]
               oUrl.attrib["status"] = "2"
               if (datetime.now()-results[dataKey]["time"]).total_seconds() >timeAging: raise
+              if len(oUrl.xpath("data"))>0: raise
               oUrl.attrib["status"] = "4" 
             except:
-              q.put({"url":oUrl.text,"sitetype":oUrl.attrib["sitetype"],"exp":oExp.text})
+              q.put({"url":oUrl.text,"sitetype":oUrl.attrib["sitetype"],"exp":oExp.text,"data":oUrl.xpath("data")})
             if dataKey in results:
               lt.SubElement(oExp,"result").text = results[dataKey].get(oExp.text)
         self.send_response(200)
