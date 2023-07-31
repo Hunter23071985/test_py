@@ -3,8 +3,8 @@ textMaxLen=1024*32-1
 timeAging=1800
 
 #WARC IO
-#from warcio.capture_http import capture_http  # requests *must* be imported after capture_http
-#from warcio import WARCWriter
+from warcio.capture_http import capture_http  # requests *must* be imported after capture_http
+from warcio import WARCWriter
 
 #system modules
 import threading, traceback, os, textwrap, io, codecs, time
@@ -35,8 +35,8 @@ cs = cloudscraper.CloudScraper(ssl_context=ssl._create_unverified_context())
 sem = threading.Semaphore(threadsCount)
 lock = threading.Lock()
 
-#warcFH = open(f'data{int(datetime.now().timestamp())}.warc.gz', 'wb')
-#warcFS = WARCWriter(warcFH)
+warcFH = open(f'data{int(datetime.now().timestamp())}.warc.gz', 'wb')
+warcFS = WARCWriter(warcFH)
 
 def detectEncoding(req):
   cdict = requests.utils._parse_content_type_header(req.headers.get("Content-Type",""))
@@ -64,8 +64,10 @@ def parseSite(url,sitetype,exp,data):
   else:
     sem.acquire(True)
     try:
+     with capture_http(warcFS):
       req = cs.get(url=url, timeout = 15)
       resp = req.content
+      warcFH.flush()
     except Exception as e:
       return f"Site error {url} {e}"
     finally:
