@@ -4,3 +4,4 @@ elementpath
 lxml
 cloudscraper
 requests
+warcio
